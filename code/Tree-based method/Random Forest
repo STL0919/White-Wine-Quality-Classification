@@ -1,0 +1,108 @@
+#7.Random Forest
+#Modeling
+p<-ncol(train_set)- 1
+mtry_val<-floor(sqrt(p))
+
+rf_model<-randomForest(
+  quality.code ~ .,data= train_set, ntree=200, mtry=mtry_val, importance=TRUE,
+  maxnodes=32, nodesize=10)
+
+#print(rf_model)
+oob_error<-rf_model$err.rate[nrow(rf_model$err.rate), "OOB"]
+cat(sprintf("OOB estimate of error rate: %.2f%%\n", 100*oob_error))
+
+# Predict on the testset
+rf_pred_class<-predict(rf_model, newdata=test_set, type="response")
+accuracy_rf<-mean(rf_pred_class==test_set$quality.code)
+cat(sprintf("Random Forest Accuracy on Test Set: %.2f%%\n", 100*accuracy_rf))
+
+# Confudion matrix
+conf_matrix_rf<-table(
+  Predicted=rf_pred_class,
+  Actual=test_set$quality.code)
+cat("Random Forest Confusion Matrix:\n")
+print(conf_matrix_rf)
+
+
+
+# Hyperparameter Optimization via Grid Search
+# parameter space
+p       <- ncol(train_set) - 1
+m_vals  <- seq(floor(sqrt(p)/2), ceiling(2*sqrt(p))) 
+M_vals  <- seq(50, 500, by = 50)                     
+grid    <- expand.grid(mtry = m_vals, ntree = M_vals)
+grid$F1 <- NA 
+
+folds <- createFolds(train_set$quality.code, k = 5, list = TRUE)
+
+# 5-fold CV for each parameter combination
+for (i in seq_len(nrow(grid))) {
+  mtry_val<-grid$mtry[i]
+  ntree_val<-grid$ntree[i]
+  
+  f1_scores<-numeric(length(folds))
+  for (j in seq_along(folds)) {
+    idx_val<-folds[[j]]
+    cv_train<-train_set[-idx_val, ]
+    cv_valid<-train_set[ idx_val, ]
+    
+    rf_cv<-randomForest(quality.code ~ ., data= cv_train, mtry=mtry_val, ntree=ntree_val)
+    pred_cv <- predict(rf_cv, newdata=cv_valid, type="response")
+    f1_scores[j]<- F1_Score(y_pred=pred_cv, y_true= cv_valid$quality.code,
+                             positive=levels(train_set$quality.code)[2])
+    }
+  grid$F1[i]<-mean(f1_scores)
+}
+
+# Find optimal parameter
+best_idx<- which.max(grid$F1)
+best_m<-grid$mtry[best_idx]
+best_M<-grid$ntree[best_idx]
+best_F1<- grid$F1[best_idx]
+cat(sprintf("Best params — mtry = %d, ntree = %d (mean CV-F1 = %.4f)\n",
+            best_m, best_M, best_F1))
+
+rf_final<-randomForest(
+  quality.code ~ .,
+  data=train_set,
+  mtry=best_m,
+  ntree= best_M,
+  importance=TRUE,
+  maxnodes=32, nodesize=10)
+rf_pred<-predict(rf_final, newdata=test_set, type="response")
+cat("Confusion matrix on test set:\n")
+print(table(Predicted=rf_pred, Actual=test_set$quality.code))
+acc_rf<-mean(rf_pred==test_set$quality.code)
+cat(sprintf("Test set accuracy: %.2f%%\n", 100*acc_rf))
+
+#Feature importance
+imp<-importance(rf_final)
+imp_df <-as.data.frame(imp) %>%
+  rownames_to_column(var="Feature") %>%
+  select(Feature, MeanDecreaseGini, MeanDecreaseAccuracy) %>%
+  pivot_longer(-Feature,names_to="Metric",values_to="Importance") %>%
+  group_by(Metric) %>%
+  arrange(Importance) %>%
+  mutate(Feature=factor(Feature, levels=unique(Feature))) %>%
+  ungroup()
+
+ggplot(imp_df, aes(x=Importance, y=Feature, fill=Metric))+
+  geom_col(position=position_dodge(width=0.8), width=0.7) +
+  facet_wrap(~ Metric, scales="free_x", ncol = 1) +
+  scale_fill_manual(values=c("MeanDecreaseAccuracy"="#1b9e77",
+                               "MeanDecreaseGini"="#d95f02"))+
+  labs(
+    title= "Variable Importance in Random Forest",
+    subtitle="Comparison of Gini‐based vs. Permutation‐based measures",
+    x="Importance",y=NULL, fill= NULL)+
+  theme_minimal(base_size=14)+
+  theme(
+    legend.position="none",
+    strip.text=element_text(face="bold", size= 12),
+    axis.text.y=element_text(size=11),
+    plot.title=element_text(face="bold", size=16, hjust =0.5),
+    plot.subtitle=element_text(size=12, hjust=0.5),
+    panel.grid.major.y=element_blank()
+  )
+
+
