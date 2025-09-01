@@ -1,0 +1,93 @@
+#3.EDA
+#3.1 summary
+by(wine, wine$quality.code, summary)
+
+#3.1 Plot a boxplot of each variable
+par(mfrow=c(4,3), mar= c(4, 4, 2.5, 1), oma=c(2, 2, 4, 1), mgp=c(2.5,1, 0))
+box_col<-"#ADD8E6"
+border_col<-"black"
+for (var in names(wine)) {
+  boxplot(wine[[var]]~wine$quality.code, main= paste("Boxplot of", var),xlab="quality.code", ylab= var,
+          col= box_col, border=border_col)
+}
+mtext("Boxplots of Wine Dataset Variables", outer=TRUE, cex=1.5, font=2)
+par(org_par)
+
+#3.2 Plot a KDE of each variable
+par(mfrow=c(4,3), mar= c(4, 4, 2.5, 1), oma=c(2, 2, 4, 1), mgp=c(2.5,1, 0))
+kde_col0 <- "#ADD8E6"   # for quality.code = 0
+kde_col1 <- "#F08080"   # for quality.code = 1
+
+for (var in names(wine)) {
+  x0 <- wine[[var]][wine$quality.code == 0]
+  x1 <- wine[[var]][wine$quality.code == 1]
+  
+  #Compute the respective density estimates
+  d0 <- density(x0)
+  d1 <- density(x1) 
+  x_lim <- range(d0$x, d1$x)
+  y_lim <- range(d0$y, d1$y)
+  
+  #plot the first density curve (quality.code = 0)
+  plot(d0,xlim= x_lim, ylim=y_lim, main=paste("KDE of", var), xlab =var, ylab="Density",
+       col=kde_col0,lwd=2)
+  #Add the second density curve (quality.code = 1)
+  lines(d1, col= kde_col1, lwd=2, lty=2)
+  
+  legend("topright", legend = c("quality.code=0", "quality.code=1"), col= c(kde_col0, kde_col1),
+         lty= c(1, 2),lwd= 2,bty="n", cex=0.8, y.intersp=0.5, inse= c(0.001, 0.001))
+}
+mtext("KDE Plots of Wine Variables by Quality Code", side=3, line=1, outer=TRUE, cex=1.5, font= 2)
+par(org_par)
+
+
+#3.3 plot the Q-Q plots and Shapiro-Wilk
+vars_nor <- c("fixed.acidity", "density", "pH",
+          "volatile.acidity", "citric.acid", "sulphates")
+par(mfrow=c(2, 3), mar=c(4, 4, 2, 1), oma=c(0, 0, 4, 0) )
+
+for (var in vars_nor) {
+  x0 <- sort(wine[wine$quality.code==0, var])
+  x1 <- sort(wine[wine$quality.code==1, var])
+  q0 <- qnorm(ppoints(x0));  q1 <- qnorm(ppoints(x1))
+  
+  plot(q0, x0,main = paste("Q-Q Plot of", var),col  = "#89CFF0",pch  = 1,
+       xlab = "Theoretical Quantiles",ylab = "Sample Quantiles")
+  slope0<-diff(quantile(x0, c(0.25,0.75)))/diff(qnorm(c(0.25,0.75)))
+  intercept0 <- quantile(x0,0.25) - slope0*qnorm(0.25)
+  abline(intercept0, slope0, col ="#89CFF0", lwd = 2)
+  
+  points(q1, x1,col = "#F08080",pch = 2)
+  slope1<-diff(quantile(x1, c(0.25,0.75))) /diff(qnorm(c(0.25,0.75)))
+  intercept1<- quantile(x1,0.25) - slope1*qnorm(0.25)
+  abline(intercept1, slope1, col="#F08080", lwd=2, lty = 2)
+  
+  legend("topleft",legend=c("Low Quality","High Quality"),
+         col= c("#89CFF0","#F08080"), pch= c(1,2), bty= "n")
+  
+  # Shapiro-Wilk
+  cat("\n===== ", var, " =====\n")
+  cat("Low Quality:\n");  print(shapiro.test(x0))
+  cat("High Quality:\n"); print(shapiro.test(x1))
+}
+
+mtext("Q-Q Plots of Selected Wine Variables by Quality",side=3,outer= TRUE,cex= 1.5,font= 2) 
+par(org_par)
+
+
+
+if (dev.cur() > 1) dev.off()
+plot.new()
+#3.4 plot a heatmap (observe the correlation between variables)
+wine_var<-wine[,-which(names(wine) == "quality.code")]
+cor_mat<-cor(wine)
+corrplot(cor_mat, method="color", addCoef.col="black", col=colorRampPalette(c("#2166AC", "white", "#B2182B"))(100),
+         tl.col="black", tl.cex=1.2, tl.srt=45, mar=c(0,0,0,0))
+
+mtext("Correlation Heatmap of Wine Dataset", side=3, line=0, cex=1.5, font= 2)
+
+#3.4 calculate the VIF for each explanatory variables.
+vif_values<-diag(solve(cor_mat))
+vif_table<-data.frame(Variable=names(vif_values),VIF = round(vif_values, 2))
+vif_table<-vif_table[order(vif_table$VIF, decreasing = TRUE), ]
+vif_table
