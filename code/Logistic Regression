@@ -1,0 +1,202 @@
+attach(wine)
+#4. Divide the dataset (training set and test set)
+#4.1.Set the split ratio
+ratio<-0.8
+n_train<-floor(ratio * n)
+names(wine)
+old_seed<-if (exists(".Random.seed")) .Random.seed else NULL
+
+set.seed(1234)
+train_ind<-sample(n, size=n_train, replace=FALSE)
+
+if (!is.null(old_seed)) {
+  .Random.seed <- old_seed
+} else {
+  rm(.Random.seed, envir = .GlobalEnv)
+}
+
+train_set <- wine[train_ind, ]
+test_set  <- wine[-train_ind, ]
+train_set$quality.code <- factor(train_set$quality.code, levels = c(0,1))
+test_set$quality.code  <- factor(test_set$quality.code,  levels = c(0,1))
+
+counts <- table(train_set$quality.code)
+print(counts)
+props <- prop.table(counts)
+print(props)
+
+#4.2.Full variable logistic regression model
+
+full_model <- glm(quality.code ~ ., data = train_set, family = binomial)
+#Predictions on the testset
+test_pred <- predict(full_model, newdata = test_set, type = "response")
+test_pred_class <- ifelse(test_pred > 0.5, 1, 0)
+
+#Confusion Matrix and ROC
+conf_matrix <- table(Predicted = test_pred_class, Actual = test_set$quality.code)
+print("Full model confusion matrix:")
+print(conf_matrix)
+
+roc_obj_log<-roc(test_set$quality.code, test_pred, quiet = TRUE)
+auc_value_log<-auc(roc_obj_log)
+
+roc_df_log <- data.frame(fpr=1 -roc_obj_log$specificities,   
+                         tpr= roc_obj_log$sensitivities)
+ggplot(roc_df_log, aes(x = fpr, y = tpr)) +
+  geom_line(color="#5CB356", size =0.9) +
+  geom_abline(intercept=0, slope = 1,
+              linetype ="dashed", color="gray60") +
+  labs(title= "ROC Curve for Full Logistic Model",
+    subtitle=paste0("AUC = ", round(auc_value_log, 3)),
+    x="FPR", y="TPR") +
+  theme_minimal(base_size= 14) +
+  theme(plot.title=element_text(face ="bold", size=18, hjust=0.5),
+    plot.subtitle=element_text(face="bold", size=14,
+                                 hjust=0.5,
+                                 margin =margin(b= 15)),
+    axis.title= element_text(size = 14),axis.text=element_text(size = 12),
+    panel.grid.major=element_line(color = "gray90"),panel.grid.minor = element_blank())
+
+
+
+#LOOCV
+wine$quality.code <- as.factor(wine$quality.code)
+levels(wine$quality.code) <- c("low","high")
+
+loocv_ctrl <- trainControl(method="LOOCV", classProbs= TRUE, 
+                           summaryFunction = twoClassSummary,savePredictions="final")
+loocv_res <- train(quality.code ~ ., data=wine,method= "glm",
+                   family=binomial,trControl=loocv_ctrl,metric= "ROC")
+loocv_preds <-loocv_res$pred
+loocv_preds
+cm_loocv <- confusionMatrix(data=loocv_preds$pred, reference=loocv_preds$obs,positive="high")
+print(cm_loocv)
+loocv_avg_error_rate<-mean(loocv_preds$pred != loocv_preds$obs)
+cat("LOOCV average error rate:", round(loocv_avg_error_rate, 4), "\n")
+cat("LOOCV Average Accuracy =", round(1-loocv_avg_error_rate, 4), "\n")
+print(loocv_res)
+
+#10_fold cross validation
+cv_ctrl<-trainControl(method ="cv",number=10,classProbs=TRUE,summaryFunction=twoClassSummary,savePredictions  = "all" )
+cv_res<-train(quality.code ~ .,data=wine,method="glm",family= binomial,trControl=cv_ctrl,metric="ROC")
+
+cv_preds<- cv_res$pred
+cv_avg_error_rate <- mean(cv_preds$pred != cv_preds$obs)
+cm_10cv <- confusionMatrix(data=cv_preds$pred, reference=cv_preds$obs,positive="high")
+print(cm_10cv)
+cat("10-fold CV average error rate:", round(cv_avg_error_rate, 4), "\n")
+cat("10-fold CV Average Accuracy =", round(1 - cv_avg_error_rate, 4), "\n")
+
+print(cv_res)
+
+#.632+Bootstrap
+
+#.632+Bootstrap error calculation function
+wine$quality.code <- factor(wine$quality.code)
+boot_fn <- function(data, indices) {
+  train   <- data[indices, ]
+  oob_idx <- setdiff(seq_len(nrow(data)), unique(indices))
+  if (length(oob_idx)==0) return(NA)
+  test    <- data[oob_idx, ]
+  
+  fit  <- glm(quality.code ~ ., data=train, family=binomial)
+  p    <- predict(fit, newdata=test, type="response")
+  pred <- factor(ifelse(p>0.5,
+                        levels(train$quality.code)[2],
+                        levels(train$quality.code)[1]),
+                 levels=levels(train$quality.code))
+  mean(pred != test$quality.code)
+}
+
+
+B<-1000
+boot_out<-boot(data=wine,
+                 statistic=boot_fn,
+                 R=B)
+e_boot<-mean(boot_out$t, na.rm=TRUE)
+fit0<-glm(quality.code ~ ., data=wine, family=binomial)
+p0<-predict(fit0, newdata=wine, type="response")
+pred0<- factor(ifelse(p0>0.5,levels(wine$quality.code)[2],levels(wine$quality.code)[1]),
+                  levels=levels(wine$quality.code))
+err<-mean(pred0!= wine$quality.code)
+tab<- table(wine$quality.code)
+maj_err<-1-max(tab)/sum(tab)  
+e_noinfo<-maj_err
+gamma<-(e_boot-err)/(e_noinfo-err)
+gamma<-pmin(pmax(gamma,0), 1)  
+
+
+w<-0.632/(1-0.368*gamma)
+e_632p<-(1-w)*err + w *e_boot
+
+cm_boots<-confusionMatrix(data=pred0,reference= wine$quality.code,positive=levels(wine$quality.code)[2])
+print(cm_boots)
+
+cat(sprintf(".632+ Bootstrap error：%.4f\n", e_632p))
+
+
+#4.3 stepwise regression
+train_set$quality.code <- factor(train_set$quality.code, levels = c(0, 1))
+test_set$quality.code <- factor(test_set$quality.code, levels = c(0, 1))
+
+step_model <- stepAIC(full_model,direction = "both",trace = FALSE)
+
+selected_vars <- names(coef(step_model))[-1]
+cat("Variables selected by stepwise regression:\n")
+print(selected_vars)
+cat("Original number of variables:", ncol(train_set) - 1, "\n")
+cat("Number of selected variables:", length(selected_vars), "\n")
+
+
+
+#Comparing the performance of the full model and the stepwise model
+
+#the performance of the full model
+full_pred <- predict(full_model, newdata = test_set, type = "response")
+full_pred_class <- ifelse(full_pred > 0.5, 1, 0)
+full_acc <- mean(full_pred_class == as.numeric(test_set$quality.code) - 1)
+full_roc <- roc(test_set$quality.code, full_pred)
+full_auc <- auc(full_roc)
+full_aic<-AIC(full_model)
+
+## 4.2 the performance of the stepwise model 
+step_pred <- predict(step_model, newdata = test_set, type = "response")
+step_pred_class <- ifelse(step_pred > 0.5, 1, 0)
+step_acc <- mean(step_pred_class == as.numeric(test_set$quality.code) - 1)
+step_roc <- roc(test_set$quality.code, step_pred)
+step_auc <- auc(step_roc)
+step_aic<-AIC(step_model)
+
+results <- data.frame(
+  Model=c("Full Model", "Stepwise Model"),
+  Accuracy= c(full_acc, step_acc),
+  AUC=c(full_auc, step_auc),
+  Variables=c(ncol(train_set) - 1, length(selected_vars)),
+  AIC=c(full_aic, step_aic),
+  stringsAsFactors = FALSE
+)
+print(results)
+
+#Visualize the results
+##ROC curve
+roc_df <- rbind(
+  data.frame(Model = "Full Model", 
+             FPR = 1 - full_roc$specificities, 
+             TPR = full_roc$sensitivities),
+  data.frame(Model = "Stepwise Model", 
+             FPR = 1 - step_roc$specificities, 
+             TPR = step_roc$sensitivities)
+)
+
+ggplot(roc_df, aes(x = FPR, y = TPR, color = Model)) +
+  geom_line(size =0.7) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+  labs(title = "ROC Curves Comparison",
+       subtitle = paste("Full Model AUC:", round(full_auc,4)," | Stepwise Model AUC:",round(step_auc, 4)),
+       x = "FPR ",y = "TPR") +
+  theme_minimal() +
+  scale_color_manual(values = c("#E41A1C", "#377EB8")) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold",size = 16,hjust = 0.5),
+        plot.subtitle = element_text(size = 12,hjust = 0.5),
+        axis.title = element_text(size = 12))
