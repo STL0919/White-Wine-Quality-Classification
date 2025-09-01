@@ -1,0 +1,44 @@
+
+#6.Bagging
+ctrl<-trainControl(method = "cv", number= 10)
+par_bag<-rpart::rpart.control(maxdepth=5, minsplit=20,
+                              minbucket=10, cp=0.001, maxsurrogate= 0)
+
+bag_model<-train(quality.code ~ ., data=train_set, method="treebag", 
+                 trControl=ctrl,metric="Accuracy", control=par_bag)
+print(bag_model)
+bag_pred <- predict(bag_model, test_set)
+cm_bag <- confusionMatrix(bag_pred, test_set$quality.code, positive = "1")
+print(cm_bag)
+
+
+#1.Feature split frequency statistics
+trees_bag <- purrr::map(bag_model$finalModel$mtrees, "btree")
+split_vars_bag <- purrr::map(trees_bag, ~ .x$frame$var[.x$frame$var != "<leaf>"]) %>%
+  unlist()
+split_freq_bag <- as.data.frame(table(split_vars_bag)) %>% arrange(desc(Freq))
+
+ggplot(split_freq_bag, aes(x=reorder(split_vars_bag, -Freq), y=Freq, fill=Freq)) +
+  geom_col(width=0.7) +
+  geom_text(aes(label=Freq), vjust=-0.5, size=3) +
+  scale_fill_distiller(palette = "Blues", direction = 1) +
+  labs(title="Split Frequency of Features in Bagging",
+    x="Feature", y="Split Count", fill="Count") +
+  theme_minimal(base_size=14) +
+  theme(
+    plot.title=element_text(face="bold", hjust=0.5),
+    axis.text.x=element_text(angle=45, hjust=1, face= "bold"),
+    axis.title=element_text(face="bold"),
+    panel.grid.major=element_line(color="gray90"),
+    panel.grid.minor=element_blank()
+  )
+
+
+#2.Calculate the prediction correlation coefficient between trees
+tree_preds_list <-lapply(trees_bag, function(tree) {
+  predict(tree, newdata=test_set, type="prob")[, "1"]})
+preds_mat<-do.call(cbind, tree_preds_list)
+colnames(preds_mat)<-paste0("tree_", seq_len(ncol(preds_mat)))
+corr_mat<-cor(preds_mat)
+mean_corr<- mean(corr_mat[upper.tri(corr_mat)])
+cat("Average correlation coefficient: ", round(mean_corr, 3), "\n")
