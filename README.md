@@ -33,7 +33,8 @@ install.packages(c(
 
 ---
 
-## Project Structure
+## 📂 Project Structure
+
 ├── code/                         # Modular R scripts for each step
 │   ├── Data import and recoding  # Load dataset and create binary labels
 │   ├── EDA                       # Exploratory Data Analysis (boxplots, KDE, QQ plots, correlation)
