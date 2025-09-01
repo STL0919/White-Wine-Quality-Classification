@@ -6,7 +6,7 @@ Models are evaluated with cross-validation and **.632+ Bootstrap** to ensure rob
 
 ---
 
-## 📦 Dataset
+## Dataset
 
 - **Name**: White Wine Quality (UCI Machine Learning Repository)  
 - **File**: `winequality-white.csv` (semicolon `;` separated)  
@@ -16,7 +16,7 @@ Models are evaluated with cross-validation and **.632+ Bootstrap** to ensure rob
 
 ---
 
-## 🛠 Environment
+## Environment
 
 - **R** (recommended ≥ 4.0)
 
@@ -30,3 +30,15 @@ install.packages(c(
   "rpart.plot","RColorBrewer","tidyr","scales","reshape2","randomForest",
   "MLmetrics","tibble","purrr","ipred","ada","e1071"
 ))
+
+## Project Structure
+├── code/                         # Modular R scripts for each step
+│   ├── Data import and recoding  # Load dataset and create binary labels
+│   ├── EDA                       # Exploratory Data Analysis (boxplots, KDE, QQ plots, correlation)
+│   ├── Logistic Regression       # Full and stepwise logistic regression with CV and bootstrap
+│   ├── SVM                       # Linear, polynomial, and RBF kernels (2D & full features)
+│   └── Tree-based methods        # Decision trees, Bagging, Random Forest, AdaBoost
+│
+├── main.R                        # Master script to run the entire pipeline
+├── winequality-white.csv         # Dataset (semicolon-separated)
+└── README.md                     # Project documentation
