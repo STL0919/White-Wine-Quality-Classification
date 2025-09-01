@@ -14,8 +14,6 @@ Models are evaluated with cross-validation and **.632+ Bootstrap** to ensure rob
   - `quality.code = 1` (high quality): `quality >= 6`  
   - `quality.code = 0` (low quality): `quality <= 5`  
 
-> Please place `winequality-white.csv` in the project root directory (same level as `main.R`).
-
 ---
 
 ## 🛠 Environment
