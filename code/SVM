@@ -1,0 +1,439 @@
+#9.SVM
+
+#9.1 Linear SVM in 2D
+tune_lin<-tune(
+  svm,
+  quality.code ~ alcohol+volatile.acidity,
+  data=train_set,
+  kernel="linear",
+  ranges=list(cost=c(0.01, 0.1, 1, 10, 100)),
+  tunecontrol= tune.control(cross=5)
+  )
+
+best_lin<-tune_lin$best.model
+cat("Best cost=", best_lin$cost, "\n")
+
+#Train the final linear SVM on the training set with the optimal cost
+svm_lin_model<-best_lin
+svm_lin_model<-svm(
+  quality.code ~ alcohol+volatile.acidity,
+  data=train_set,
+  kernel="linear",
+  cost=best_lin$cost,
+  probability=TRUE
+)
+
+#Predict in the test set
+pred_class_lin <- predict(svm_lin_model, newdata=test_set)
+
+pred_prob_lin<-attr(
+  predict(svm_lin_model, newdata=test_set, probability=TRUE),
+  "probabilities"
+)[, "1"]
+
+#Confusion matrix of linear model
+cm_lin<-table(Predicted=pred_class_lin, Actual=test_set$quality.code)
+print(cm_lin)
+tp<-cm_lin["1","1"]
+tn<-cm_lin["0","0"]
+fp<-cm_lin["1","0"]
+fn<-cm_lin["0","1"]
+metrics_lin<-c(
+  Accuracy=(tp+tn)/sum(cm_lin),
+  Precision=tp/(tp+fp),
+  Recall=tp/(tp+fn),
+  Specificity=tn/(tn+fp),
+  F1=2*tp/(2*tp+fp+ fn)
+)
+print(round(metrics_lin, 4))
+
+#Plot a line graph of classification accuracy under different regularization strengths
+#Extract CV performance from tune() results
+cv_perf<-tune_lin$performances
+cv_df<-data.frame(
+  cost=cv_perf$cost,
+  accuracy=1-cv_perf$error
+)
+
+ggplot(cv_df, aes(x=cost, y=accuracy)) +
+  geom_line(size=1.1, color="steelblue") +
+  geom_point(size=3, color="steelblue", fill="white", shape=21) +
+  scale_x_log10(breaks=cv_df$cost,
+                labels=as.character(cv_df$cost))+
+  labs(
+    x="Regularization Parameter",
+    y="Cross Validation Accuracy",
+    title="The Cross Validation Accuracy by Regularization Strength"
+  )+
+  theme_minimal()+
+ theme(
+    plot.title=element_text(hjust=0.5, face="bold"),
+    panel.grid.major=element_line(color="grey85"))
+
+
+
+
+#Plot decision boundary
+al_seq <- seq(min(train_set$alcohol), max(train_set$alcohol), length = 200)
+va_seq <- seq(min(train_set$volatile.acidity), max(train_set$volatile.acidity), length = 200)
+grid_lin <- expand.grid(alcohol = al_seq, volatile.acidity = va_seq)
+grid_lin$pred <- predict(svm_lin_model, newdata = grid_lin)
+grid_lin$pred_class <- as.numeric(predict(svm_lin_model, newdata = grid_lin))
+
+ggplot()+
+  geom_point(data = test_set, 
+             aes(x = alcohol, y = volatile.acidity, color = factor(quality.code)),
+             alpha = 0.6, size = 2) +
+  geom_contour(data = grid_lin, 
+               aes(x = alcohol, y = volatile.acidity, z =pred_class),
+               breaks = 1.5, linetype = "solid", color = "black") +
+  scale_color_manual(
+    values=c("0"="#4C72B0", "1"="#C44E52"),
+    labels=c("Low quality", "High quality")
+  )+
+  labs(
+    title="Linear SVM Decision Boundary in Two Dimension",
+    x="Alcohol",
+    y="Volatile Acidity",
+    color="Quality Code"
+  )+
+  theme_minimal(base_family="Arial", base_size=14) +
+  theme(
+    plot.title=element_text(face="bold",size=16, hjust=0.5),
+    axis.title=element_text(size=12),
+    axis.text=element_text(size=11),
+    legend.position=c(0.85, 0.15),
+    legend.background= element_rect(fill=alpha("white", 0.7), color=NA),
+    panel.grid.major=element_line(color="gray90"),
+    panel.grid.minor=element_blank()
+  )
+
+
+
+#9.2 Linear SVM in High Dimension
+tune_lin_hd<-tune(
+  svm,
+  quality.code ~ .,
+  data=train_set,
+  kernel="linear",
+  ranges=list(cost=c(0.01, 0.1, 1, 10, 100)),
+  tunecontrol= tune.control(cross=10)
+)
+
+best_lin_hd<-tune_lin_hd$best.model
+cat("Best cost=", best_lin_hd$cost, "\n")
+
+#Train the final linear SVM on the training set with the optimal cost
+svm_lin_model_hd<-best_lin_hd
+svm_lin_model_hd<-svm(
+  quality.code ~ .,
+  data=train_set,
+  kernel="linear",
+  cost=best_lin_hd$cost,
+  probability=TRUE
+)
+
+#Predict in the test set
+pred_class_lin_hd <- predict(svm_lin_model_hd, newdata=test_set)
+
+pred_prob_lin_hd<-attr(
+  predict(svm_lin_model_hd, newdata=test_set, probability=TRUE),
+  "probabilities"
+)[, "1"]
+
+#Confusion matrix of linear model
+cm_lin_hd<-table(Predicted=pred_class_lin_hd, Actual=test_set$quality.code)
+print(cm_lin_hd)
+tp<-cm_lin_hd["1","1"]
+tn<-cm_lin_hd["0","0"]
+fp<-cm_lin_hd["1","0"]
+fn<-cm_lin_hd["0","1"]
+metrics_lin_hd<-c(
+  Accuracy=(tp+tn)/sum(cm_lin_hd),
+  Precision=tp/(tp+fp),
+  Recall=tp/(tp+fn),
+  Specificity=tn/(tn+fp),
+  F1=2*tp/(2*tp+fp+ fn)
+)
+print(round(metrics_lin_hd, 4))
+
+#Plot a line graph of classification accuracy under different regularization strengths
+#Extract CV performance from tune() results
+cv_perf_hd<-tune_lin_hd$performances
+cv_df_hd<-data.frame(
+  cost=cv_perf_hd$cost,
+  accuracy=1-cv_perf_hd$error
+)
+
+ggplot(cv_df_hd, aes(x=cost, y=accuracy)) +
+  geom_line(size=1.1, color="steelblue") +
+  geom_point(size=3, color="steelblue", fill="white", shape=21) +
+  scale_x_log10(breaks=cv_df_hd$cost,
+                labels=as.character(cv_df_hd$cost))+
+  labs(
+    x="Regularization Parameter",
+    y="Cross Validation Accuracy",
+    title="The Cross Validation Accuracy by Regularization Strength (Full covariables)"
+  )+
+  theme_minimal()+
+  theme(
+    plot.title=element_text(hjust=0.5, face="bold"),
+    panel.grid.major=element_line(color="grey85"))
+
+
+# 9.3 Nonlinear SVM in two dimension
+costs<-c(0.1, 1, 10, 100)
+degrees<-c(3,4,5)
+coef0s<-c(2,3,4)
+
+tune_poly<-tune(
+  svm,
+  quality.code ~ alcohol+volatile.acidity,
+  data=train_set,
+  kernel="polynomial",
+  ranges=list(
+    cost=costs,
+    degree=degrees,
+    coef0=coef0s),
+  tunecontrol=tune.control(cross=10),
+  tolerance=1e-3, 
+  cachesize=500
+)
+
+
+print(tune_poly)
+best_poly<-tune_poly$best.model
+cat("Best parameters:\n",
+    " cost   =", best_poly$cost,"\n",
+    " degree =", best_poly$degree,"\n",
+    " coef0  =", best_poly$coef0, "\n"
+)
+
+
+svm_poly_final <- svm(
+  quality.code~alcohol+volatile.acidity,
+  data= train_set,
+  kernel="polynomial",
+  cost=best_poly$cost,
+  degree=best_poly$degree,
+  coef0=best_poly$coef0,
+  probability=TRUE,
+  tolerance=1e-3,
+  cachesize=200
+)
+
+pred_poly<-predict(svm_poly_final, newdata=test_set)
+acc_poly<-mean(pred_poly==test_set$quality.code)
+
+cm_poly<-table(Predicted=pred_poly,
+                 Actual=test_set$quality.code)
+print(cm_poly)
+cat("Test-set Accuracy (poly):", round(acc_poly, 4), "\n")
+
+
+al_seq<-seq(min(train_set$alcohol), max(train_set$alcohol), length=200)
+va_seq<-seq(min(train_set$volatile.acidity), max(train_set$volatile.acidity), length=200)
+grid_poly<-expand.grid(
+  alcohol=al_seq,
+  volatile.acidity=va_seq
+)
+
+grid_poly$pred_class<-as.numeric(
+  predict(svm_poly_final, newdata=grid_poly)
+)
+
+
+ggplot()+
+  geom_point(data=test_set, 
+             aes(x= alcohol, y =volatile.acidity, color=factor(quality.code)),
+             alpha=0.6, size=2) +
+  geom_contour(data=grid_poly, 
+               aes(x=alcohol, y=volatile.acidity, z=pred_class),
+               breaks=1.5, linetype="solid", color="black") +
+  scale_color_manual(
+    values=c("0"="#4C72B0", "1"="#C44E52"),
+    labels=c("Low quality", "High quality")
+  )+
+  labs(
+    title="Nonlinear SVM Decision Boundary with Poly Kernel",
+    x="Alcohol",
+    y="Volatile Acidity",
+    color="Quality Code"
+  )+
+  theme_minimal(base_family="Arial", base_size=14) +
+  theme(
+    plot.title=element_text(face="bold",size=16, hjust=0.5),
+    axis.title=element_text(size=12),
+    axis.text=element_text(size=11),
+    legend.position=c(0.85, 0.15),
+    legend.background= element_rect(fill=alpha("white", 0.7), color=NA),
+    panel.grid.major=element_line(color="gray90"),
+    panel.grid.minor=element_blank()
+  )
+
+
+# 9.4 Nonlinear SVM in full feature space
+costs<-c(0.1, 1, 10, 100)
+degrees<-c(3,4,5)
+coef0s<-c(0,1)
+
+tune_poly_full<-tune(
+  svm,
+  quality.code ~ .,
+  data=train_set,
+  kernel="polynomial",
+  ranges=list(
+    cost=costs,
+    degree=degrees,
+    coef0=coef0s),
+  tunecontrol=tune.control(cross=10),
+  tolerance=1e-3, 
+  cachesize=500
+)
+
+
+print(tune_poly)
+best_poly_full<-tune_poly_full$best.model
+cat("Best parameters:\n",
+    " cost   =", best_poly_full$cost,"\n",
+    " degree =", best_poly_full$degree,"\n",
+    " coef0  =", best_poly_full$coef0, "\n"
+)
+
+
+svm_poly_final_full <- svm(
+  quality.code ~ .,
+  data= train_set,
+  kernel="polynomial",
+  cost=best_poly_full$cost,
+  degree=best_poly_full$degree,
+  coef0=best_poly_full$coef0,
+  probability=TRUE,
+  tolerance=1e-3,
+  cachesize=200
+)
+
+pred_poly_full<-predict(svm_poly_final_full, newdata=test_set)
+acc_poly_full<-mean(pred_poly_full==test_set$quality.code)
+
+cm_poly_full<-table(Predicted=pred_poly_full,
+               Actual=test_set$quality.code)
+print(cm_poly_full)
+cat("Test-set Accuracy (poly):", round(acc_poly_full, 4), "\n")
+
+
+
+# 9.5 Nonlinear SVM in two dimension with RBF kernel
+costs<-c(0.1, 1, 10, 100)
+gammas<-c(0.001, 0.01, 0.1, 1)
+
+tune_rbf<-tune(
+  svm,
+  quality.code ~ alcohol+volatile.acidity,
+  data=train_set,
+  kernel="radial",
+  ranges=list(cost=costs, gamma=gammas),
+  tunecontrol=tune.control(cross=10),
+  tolerance=1e-3,
+  cachesize=500)
+
+print(tune_rbf)
+best_rbf<-tune_rbf$best.model
+cat("Best parameters:\n",
+    " cost  =", best_rbf$cost, "\n",
+    " gamma =", best_rbf$gamma, "\n"
+)
+
+svm_rbf_final<-svm(
+  quality.code ~ alcohol+volatile.acidity,
+  data=train_set,
+  kernel="radial",
+  cost=best_rbf$cost,
+  gamma=best_rbf$gamma,
+  probability=TRUE,
+  tolerance=1e-3,
+  cachesize=200)
+
+pred_rbf<-predict(svm_rbf_final, newdata=test_set)
+acc_rbf<-mean(pred_rbf==test_set$quality.code)
+
+cm_rbf <-table(Predicted=pred_rbf,
+                Actual= test_set$quality.code)
+print(cm_rbf)
+cat("Test-set Accuracy (RBF):", round(acc_rbf, 4), "\n")
+
+
+al_seq<-seq(min(train_set$alcohol), max(train_set$alcohol), length = 200)
+va_seq<-seq(min(train_set$volatile.acidity), max(train_set$volatile.acidity), length = 200)
+grid_rbf<-expand.grid(alcohol=al_seq, volatile.acidity=va_seq)
+
+grid_rbf$pred_class<-as.numeric(predict(svm_rbf_final, newdata=grid_rbf))
+
+ggplot()+
+  geom_point(data=test_set,
+             aes(x=alcohol, y=volatile.acidity, color=factor(quality.code)),
+             alpha=0.6, size=2)+
+  geom_contour(data=grid_rbf,
+               aes(x=alcohol, y=volatile.acidity, z=pred_class),
+               breaks=1.5, linetype="solid", color="black")+
+  scale_color_manual(
+    values=c("0" = "#4C72B0", "1" = "#C44E52"),
+    labels=c("Low quality", "High quality")
+    )+
+  labs(
+    title="Nonlinear SVM Decision Boundary with RBF Kernel",
+    x="Alcohol", y="Volatile Acidity",
+    color="Quality Code"
+  )+
+  theme_minimal(base_family= "Arial", base_size=14) +
+  theme(
+    plot.title=element_text(face="bold", size=16, hjust=0.5),
+    axis.title=element_text(size=12),
+    axis.text=element_text(size=11),
+    legend.position=c(0.85, 0.15),
+    legend.background=element_rect(fill=alpha("white", 0.7), color= NA),
+    panel.grid.major=element_line(color="gray90"),
+    panel.grid.minor=element_blank()
+  )
+
+
+# 9.6 Nonlinear SVM in full feature space with RBF kernel
+costs<-c(0.1, 1, 10, 100)
+gammas<-c(0.001, 0.01, 0.1, 1)
+
+tune_rbf_full<-tune(
+  svm,
+  quality.code ~ .,
+  data= train_set,
+  kernel="radial",
+  ranges=list(cost=costs, gamma=gammas),
+  tunecontrol=tune.control(cross=10),
+  tolerance=1e-3,
+  cachesize=500
+)
+
+print(tune_rbf_full)
+best_rbf_full <- tune_rbf_full$best.model
+cat("Best parameters:\n",
+    " cost  =", best_rbf_full$cost, "\n",
+    " gamma =", best_rbf_full$gamma, "\n"
+)
+
+svm_rbf_final_full <- svm(
+  quality.code ~ .,
+  data=train_set,
+  kernel="radial",
+  cost=best_rbf_full$cost,
+  gamma=best_rbf_full$gamma,
+  probability=TRUE,
+  tolerance=1e-3,
+  cachesize= 200
+)
+
+pred_rbf_full<-predict(svm_rbf_final_full, newdata=test_set)
+acc_rbf_full<-mean(pred_rbf_full==test_set$quality.code)
+
+cm_rbf_full<-table(Predicted=pred_rbf_full, Actual=test_set$quality.code)
+print(cm_rbf_full)
+cat("Test-set Accuracy (RBF):", round(acc_rbf_full, 4), "\n")
+
