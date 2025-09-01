@@ -31,17 +31,3 @@ install.packages(c(
   "MLmetrics","tibble","purrr","ipred","ada","e1071"
 ))
 
----
-
-## 📂 Project Structure
-
-├── code/                         # Modular R scripts for each step
-│   ├── Data import and recoding  # Load dataset and create binary labels
-│   ├── EDA                       # Exploratory Data Analysis (boxplots, KDE, QQ plots, correlation)
-│   ├── Logistic Regression       # Full and stepwise logistic regression with CV and bootstrap
-│   ├── SVM                       # Linear, polynomial, and RBF kernels (2D & full features)
-│   └── Tree-based methods        # Decision trees, Bagging, Random Forest, AdaBoost
-│
-├── main.R                        # Master script to run the entire pipeline
-├── winequality-white.csv         # Dataset (semicolon-separated)
-└── README.md                     # Project documentation
