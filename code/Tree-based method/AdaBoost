@@ -1,0 +1,13 @@
+
+#8.AdaBoost
+ada_grid <- expand.grid(
+  iter=c(50, 100, 150),
+  maxdepth=5,     
+  nu=c(0.05, 0.1, 0.2))
+
+ada_model <- train( quality.code ~ ., data= train_set, method="ada", 
+                    trControl=ctrl, tuneGrid=ada_grid, metric ="Accuracy")
+print(ada_model)
+ada_pred <- predict(ada_model, test_set)
+cm_ada <- confusionMatrix(ada_pred, test_set$quality.code, positive = "1")
+print(cm_ada)
